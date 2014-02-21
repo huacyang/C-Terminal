@@ -13,6 +13,29 @@
 // defines the maximun number of input commands
 #define tokenSize 100
 
+struct Command
+{
+        int script[2];
+            ScriptPtr args;
+                CommandPtr * next;
+
+}typedef struct Command * CommandPtr;
+
+struct Script
+{
+        int script[2];
+            struct Script args;
+                struct Command * next;
+}typedef struct Script * ScriptPtr;
+
+//CommandPtr = calloc(sizeof(CommandPtr));
+//ScriptPtr = calloc(sizeof(ScriptPtr));
+
+
+//When creating a command need to allocate space for the command and space for the script itself
+//When passing the command into execv iterate through the list and add to an array, then pass to : execv(path , arguments)
+
+
 int parseLetter(char *text, int i) {
 
 	for (; i < strlen(text); i++) {

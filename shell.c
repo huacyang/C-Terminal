@@ -146,6 +146,10 @@ int main(int argc, char **argv) {
 			i = parseSpace(text, i);
 		} else if (text[i] == '|') {
 			// initialize the command struct
+            CommandPtr = calloc(sizeof(CommandPtr));
+            ScriptPtr = calloc(sizeof(ScriptPtr));
+            CommandPtr->args = ScriptPtr;
+            //ADd in the arguments!!
 			printf("%i - %i\n", str, i);
 			printf("[|]\n");
 		} else {

@@ -1,0 +1,148 @@
+/*
+ * @author: Hua Yang
+ * @RUID: 128-00-2637
+ * @NetID: kaiketsu
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <unistd.h>
+// defines the maximun size of input buffer
+#define bufferSize 4096
+// defines the maximun number of input commands
+#define commandSize 100
+
+// global variable for toggling pipes
+int bar;
+// global variable for toggling quotes
+int quote;
+
+/*
+ * Helper method for getting the next command
+ */
+char *nextCMD(char *text, int str, int end) {
+
+	int i, n;
+	char *substring = calloc(end-str, sizeof(char*));
+	for (i = str, n = 0; i < end; i++, n++)
+		substring[n] = text[i];
+	return substring;
+}
+
+/*
+ * Helper method for getting the next token
+ */
+int nextTokenPtr(char *text, int ptr) {
+
+	int n, i = ptr,
+		len = strlen(text);
+
+	if (quote == 1) { // parse quotes
+		n = i-1;
+		while (text[i] != text[n])
+			i++;
+		quote = 0;
+	} else if (text[i] == '|') { // parse bar
+		i++;
+	} else { // parse string
+		for (; i < len; i++) {
+			if (text[i] == '\'' || text[i] == '\"') {
+				quote = 1; break;
+			} else if (text[i] == '|') {
+				bar = 1;
+				break;
+			} else if (text[i] == ' ' || text[i] == '\n' || text[i] == '\r') 
+				break;
+		}
+	}
+	return i;
+}
+
+/*
+ * Helper method for reading from file
+ */
+char *readFile(char *filepath) {
+
+	FILE* file;
+	char* text = calloc(bufferSize, sizeof(char*));
+	file = fopen(filepath, "r");
+	if (file == NULL) {
+		fprintf(stderr, "File does not exist!\n");
+		exit(0);
+	}
+	fgets(text, bufferSize, file);
+	fclose(file);
+	return text;
+}
+
+/* 
+ * Helper method for reading from command line
+ */
+char *readLine() {
+
+	char* text = calloc(bufferSize, sizeof(char*));
+	printf("Enter command(s):\n$ ");
+	// reads user input
+	fgets(text, bufferSize, stdin);
+	return text;
+}
+
+/*
+ * Method method
+ */
+int main(int argc, char **argv) {
+
+	// defines user input size
+	char *text, *sub;
+	int str, ptr, textLen, cmdPTR, cmdSTR, cmdEND;
+	int *cmd;
+
+	if (isatty(0)) { // input from terminal (terminal input)
+		text = readLine();
+	} else if (isatty(1)) { // input to terminal (standard input)
+		text = readFile(argv[1]);
+	} else { // wrong input
+		fprintf(stderr, "Wrong format!");
+	}
+
+	bar = 0, quote = 0, cmdPTR = 0;
+	textLen = strlen(text);
+	cmd = calloc(commandSize, sizeof(int*));
+	// loops through the text
+	for (ptr = 0; ptr < textLen; ptr++) {
+		str = ptr;
+		ptr = nextTokenPtr(text, str);
+		/*
+		if (str != ptr) {
+  			sub = nextCMD(text, str, ptr);
+			printf("%s\n", sub);
+		} */
+		if (bar == 1) {
+			bar = 0;
+			cmd[cmdPTR] = ptr;
+			printf("STORED: %i\n",cmd[cmdPTR]);
+			cmdPTR++;
+		}
+	}
+
+	for (ptr = 0; ptr < commandSize; ptr++) {
+		// set end point
+		if (cmdPTR == 0)				cmdEND = textLen-1; // 1st command
+		else if (cmd[ptr] == '\0')		break; // empty slot
+		else if (cmd[ptr] == textLen-1)	break; // end of commands
+		else							cmdEND = cmd[ptr]; // next command
+		// set start point
+		if (ptr == 0)	cmdSTR = 0; // 1st command
+		else			cmdSTR = cmd[ptr]-1; // next command
+
+		cmdPTR = -1;
+		sub = nextCMD(text, cmdSTR, cmdEND);
+		printf("%s\n", sub);
+	}
+
+	free(sub);
+	free(text);
+	exit(0);
+}

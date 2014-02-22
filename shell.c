@@ -13,32 +13,57 @@
 // defines the maximun number of input commands
 #define tokenSize 100
 
-struct Command
-{
-        int script[2];
-            ScriptPtr args;
-                CommandPtr * next;
+struct cmd {
+    int *ssIndex;
+    struct arg *arguments;
+    struct cmd *next;
+}; typedef struct cmd *cmdPtr;
 
-}typedef struct Command * CommandPtr;
-
-struct Script
-{
-        int script[2];
-            struct Script args;
-                struct Command * next;
-}typedef struct Script * ScriptPtr;
-
-//CommandPtr = calloc(sizeof(CommandPtr));
-//ScriptPtr = calloc(sizeof(ScriptPtr));
-
+struct arg {
+	int *argIndex;
+    struct arg *next;
+}; typedef struct arg *argPtr;
 
 //When creating a command need to allocate space for the command and space for the script itself
 //When passing the command into execv iterate through the list and add to an array, then pass to : execv(path , arguments)
 
+/*
+ * Initializes the linked list for storing arguments
+ */
+argPtr initializeARG() {
+	argPtr arg = (struct arg*) calloc(2, sizeof(struct arg));
+	arg->argIndex = (int*) calloc(2, sizeof(int));
+	arg->next = NULL;
+	return arg;
+}
 
+/*
+ * Initializes the linked list for storing commands
+ */
+cmdPtr initializeCMD() {
+	cmdPtr cmd = (struct cmd*) calloc(3, sizeof(struct cmd));
+	cmd->ssIndex = (int *) calloc(2, sizeof(int));
+	cmd->arguments = initializeARG();
+	cmd->next = NULL;
+	return cmd;
+}
+
+/*
+ * Helper method for getting the next token
+ */
+char *nextToken(char *text, int str, int end) {
+	int i, n;
+	char *substring = (char*) calloc(end-str, sizeof(char));
+	for (i = str, n = 0; i < end; i++, n++)
+		substring[n] = text[i];
+	return substring;
+}
+
+/*
+ * Helper method for parsing letters
+ */
 int parseLetter(char *text, int i) {
-
-	for (; i < strlen(text); i++) {
+	for (; i < strlen(text); i++)
 		if (text[i+1] == '\'' ||
 			text[i+1] == '\"' ||
 			text[i+1] == ' '  ||
@@ -46,51 +71,57 @@ int parseLetter(char *text, int i) {
 			text[i+1] == '\n' ||
 			text[i+1] == '\r')
 			break;
-	}
 	return i;
 }
 
+/*
+ * Helper method for parsing empty spaces
+ */
 int parseSpace(char *text, int i) {
-
-	for (; i < strlen(text); i++) {
+	for (; i < strlen(text); i++)
 		if (text[i+1] != ' ')
 			break;
-	}
 	return i;
 }
 
+/*
+ * Helper method for parsing quotes
+ */
 int parseSpecialChar(char *text, int i, char arg) {
-
 	int found = 0;
 	for (; i < strlen(text); i++) {
 		if (text[i] == arg) {
-			found = 1; break;
-		}
-	}
+			found = 1; break; } }
 	if (found != 1)
 		return -1;
 	return i;
 }
 
-/*
- * Helper method for getting the next token
- */
-char *nextToken(char *text, int str, int end) {
+void printCommands(cmdPtr cmd, char *text) {
+	cmdPtr cmdPTR;
+	argPtr argPTR;
+	char *word;
+	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
+		word = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
+		printf("./%s ", word);
 
-	int i, n;
-	char *substring = calloc(end-str, sizeof(char*));
-	for (i = str, n = 0; i < end; i++, n++)
-		substring[n] = text[i];
-	return substring;
+		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
+			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
+				break;
+			word = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
+			printf("%s ", word);
+		}
+		printf("\n");
+	}
+	free(word);
 }
 
 /*
  * Helper method for reading from file
  */
 char *readFile(char *filepath) {
-
 	FILE* file;
-	char* text = calloc(bufferSize, sizeof(char*));
+	char* text = (char *) calloc(bufferSize, sizeof(char));
 	file = fopen(filepath, "r");
 	if (file == NULL) {
 		fprintf(stderr, "File does not exist!\n");
@@ -105,8 +136,7 @@ char *readFile(char *filepath) {
  * Helper method for reading from command line
  */
 char *readLine() {
-
-	char* text = calloc(bufferSize, sizeof(char*));
+	char* text = (char*) calloc(bufferSize, sizeof(char));
 	printf("Enter command(s):\n$ ");
 	// reads user input
 	fgets(text, bufferSize, stdin);
@@ -114,12 +144,41 @@ char *readLine() {
 }
 
 /*
- * Method method
+ * Helper method for storing the indexes of individual word or phrase.
+ *	@param	arg		linked list of arguments
+ *	@param	start	the start index of a word or phrase
+ *	@param	end		the end index of a word or phrase
+ *	@return			the next argument in the linked list (empty)
+ */
+void storeARG(argPtr arg, int start, int end) {
+	arg->argIndex[0] = start;
+	arg->argIndex[1] = end;
+	arg->next = initializeARG();
+	arg = arg->next;
+}
+
+/*
+ * Helper method for storing the indexes of individual word or phrase.
+ *	@param	cmd		linked list of commands
+ *	@param	start	the start index of a shell script
+ *	@param	end		the end index of a shell script
+ *	@return			1
+ */
+int storeCMD(cmdPtr cmd, int start, int end) {
+	cmd->ssIndex[0] = start;
+	cmd->ssIndex[1] = end;
+	return 1;
+}
+
+/*
+ * Main method
  */
 int main(int argc, char **argv) {
 
-	int i, str;
+	int i, str, toggle;
 	char *text, *temp;
+	cmdPtr cmds, currentCMD;
+	argPtr currentARG;
 
 	if (isatty(0)) { // input from terminal (terminal input)
 		text = readLine();
@@ -128,6 +187,11 @@ int main(int argc, char **argv) {
 	} else { // wrong input
 		fprintf(stderr, "Wrong format!");
 	}
+
+	cmds = initializeCMD();
+	currentCMD = cmds;
+	currentARG = cmds->arguments;
+	toggle = 0;
 
 	for (i = 0; i < strlen(text); i++) {
 		str = i;
@@ -139,27 +203,36 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Error: mismatched quote!\n");
 				exit(1);
 			}
-			temp = nextToken(text, str, i+1);
-			printf("%i - %i\n", str, i);
-			printf("[%s]\n", temp);
+			//temp = nextToken(text, str, i+1);
+			//printf("%i - %i\n", str, i);
+			//printf("[%s]\n", temp);
+
+			if (toggle == 0)
+				toggle = storeCMD(currentCMD, str, i+1);
+			else
+				storeARG(currentARG, str, i+1);
 		} else if (text[i] == ' ') {
 			i = parseSpace(text, i);
 		} else if (text[i] == '|') {
-			// initialize the command struct
-            CommandPtr = calloc(sizeof(CommandPtr));
-            ScriptPtr = calloc(sizeof(ScriptPtr));
-            CommandPtr->args = ScriptPtr;
-            //ADd in the arguments!!
-			printf("%i - %i\n", str, i);
-			printf("[|]\n");
+			toggle = 0;
+			currentCMD->next = initializeCMD();
+			currentCMD = currentCMD->next;
+			//printf("%i - %i\n", str, i);
+			//printf("[|]\n");
 		} else {
 			i = parseLetter(text, i);
-			temp = nextToken(text, str, i+1);
-			printf("%i - %i\n", str, i);
-			printf("[%s]\n", temp);
-		}
+			//temp = nextToken(text, str, i+1);
+			//printf("%i - %i\n", str, i);
+			//printf("[%s]\n", temp);
 
+			if (toggle == 0)
+				toggle = storeCMD(currentCMD, str, i+1);
+			else
+				storeARG(currentARG, str, i+1);
+		}
 	}
 
+	printCommands(cmds, text);
+	//freeAll(cmds);
 	exit(0);
 }

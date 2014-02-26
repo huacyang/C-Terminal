@@ -8,6 +8,7 @@
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <ctype.h>
 // defines the maximun size of input buffer
 #define bufferSize 4096
 // defines the maximun number of input commands
@@ -39,6 +40,8 @@ argPtr initializeARG() {
 	arg->next = NULL;
 	return arg;
 }
+
+
 
 /*
  * Initializes the linked list for storing commands
@@ -129,25 +132,52 @@ void executeCommands(cmdPtr cmd, char *text) {
 	argPtr argPTR;
 	char *command;
 	char *argument;
-
+	char * path = "/bin/";
+	char *result;
+	int currentPos = 1;
 	//Allocate memory for the array using the total number of args
 
-
+	char ** argList = (char **) calloc(cmd->numberOfArgs+1, sizeof(char *));
 
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
 		command = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
-		printf("./%s ", command);
+		//printf("./%s ", command);
 
 		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
 			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
 				break;
 			argument = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
-
-			printf("%s ", argument);
+			argList[currentPos] = argument;
+			currentPos++;
+			//printf("%s ", argument);
 		}
-		printf("\n");
+
+		result = (char *) calloc( (strlen(path)+strlen(command)),sizeof(char));
+		strcpy(result,path);
+		strcat(result,command);
+
+		argList[0] = (char *) calloc(strlen(result),sizeof(char));
+
+		strcpy(argList[0],result);
+
+		//printf("%s\n", argList[0]);
+
+		//printf("%s this is the arglist at 1\n", argList[1]);
+
+		printf("[%s] [%s]\n", argList[0], argList[1] );
+		//printf("asdlfkjkasdlfkjalsdkfjalsdkjfasdfasdf");
+		//execv(result,argList);
+		//char * array[] = {"/bin/ls","-l"};
+
+		
+		//printf("\n [%s]",argList[3]);
+		//printf("\n ------------------- \n");
+
+		execv("/bin/ls",argList);
+
 	}
-	free(word);
+	free(argument);
+	free(command);
 }
 
 /*
@@ -273,6 +303,7 @@ int main(int argc, char **argv) {
 	}
 
 	printCommands(cmds, text);
+	executeCommands(cmds, text);
 	//freeAll(cmds);
 	exit(0);
 }

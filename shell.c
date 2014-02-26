@@ -139,10 +139,10 @@ void executeCommands(cmdPtr cmd, char *text) {
 
 	printf("The number of args is %d",cmd->numberOfArgs);
 
-	char ** argList = (char **) calloc(cmd->numberOfArgs+1, sizeof(char *));
+	char ** argList = (char **) calloc(cmd->numberOfArgs+2, sizeof(char *));
 
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
-		command = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
+		argList[0] = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
 		//printf("./%s ", command);
 
 		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
@@ -152,32 +152,11 @@ void executeCommands(cmdPtr cmd, char *text) {
 
 			argList[currentPos] = argument;
 			currentPos++;
-			//printf("%s ", argument);
 		}
 
-		result = (char *) calloc( (strlen(path)+strlen(command)),sizeof(char));
-		strcpy(result,path);
-		strcat(result,command);
-
-		argList[0] = (char *) calloc(strlen(result),sizeof(char));
-
-		strcpy(argList[0],result);
-
-		//printf("%s\n", argList[0]);
-
-		//printf("%s this is the arglist at 1\n", argList[1]);
-
-		printf("[%s] [%s] [%s] [%s] \n", argList[0], argList[1], argList[2], argList[3] );
-		//printf("asdlfkjkasdlfkjalsdkfjalsdkjfasdfasdf");
-		//execv(result,argList);
-		//char * array[] = {"/bin/ls","-l"};
-
-		argList[cmd->numberOfArgs+1] = NULL;
-		//printf("\n ------------------- \n");
-
-		if (execv(result,argList) < 0)
+		if (execvp(command,argList) < 0)
 		{
-			perror ("execv");
+			perror ("execvp");
 		}
 
 	}

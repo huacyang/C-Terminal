@@ -137,6 +137,8 @@ void executeCommands(cmdPtr cmd, char *text) {
 	int currentPos = 1;
 	//Allocate memory for the array using the total number of args
 
+	printf("The number of args is %d",cmd->numberOfArgs);
+
 	char ** argList = (char **) calloc(cmd->numberOfArgs+1, sizeof(char *));
 
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
@@ -147,6 +149,7 @@ void executeCommands(cmdPtr cmd, char *text) {
 			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
 				break;
 			argument = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
+
 			argList[currentPos] = argument;
 			currentPos++;
 			//printf("%s ", argument);
@@ -164,16 +167,18 @@ void executeCommands(cmdPtr cmd, char *text) {
 
 		//printf("%s this is the arglist at 1\n", argList[1]);
 
-		printf("[%s] [%s]\n", argList[0], argList[1] );
+		printf("[%s] [%s] [%s] [%s] \n", argList[0], argList[1], argList[2], argList[3] );
 		//printf("asdlfkjkasdlfkjalsdkfjalsdkjfasdfasdf");
 		//execv(result,argList);
 		//char * array[] = {"/bin/ls","-l"};
 
-		
-		//printf("\n [%s]",argList[3]);
+		argList[cmd->numberOfArgs+1] = NULL;
 		//printf("\n ------------------- \n");
 
-		execv("/bin/ls",argList);
+		if (execv(result,argList) < 0)
+		{
+			perror ("execv");
+		}
 
 	}
 	free(argument);

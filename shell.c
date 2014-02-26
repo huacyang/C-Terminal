@@ -125,6 +125,7 @@ void printCommands(cmdPtr cmd, char *text) {
 
 /**
 	Run the executed commands brah!
+	This method runs one command at a time
 **/
 
 void executeCommands(cmdPtr cmd, char *text) {
@@ -158,7 +159,6 @@ void executeCommands(cmdPtr cmd, char *text) {
 		{
 			perror ("execvp");
 		}
-
 	}
 	free(argument);
 	free(command);
@@ -219,6 +219,18 @@ int storeCMD(cmdPtr cmd, int start, int end) {
 
 /*
  * Main method
+
+	Within this method after were done with initialization we need to start using pipe and dub2
+
+	1. Create a pipe using pipe(fd) where fd is the file desc array or in other words a blank int array that will contain output
+	2. In the child process run a method that will execute the different commands
+		- Within the child process fork as many times as needed to complete all the commands in the array in the example this is 2
+		- Within the child processes use dupe2(cmd[n],n) which changes the standard file desc
+		- Then close the pipe using close(cmd[n+1])
+		- Then run the execvp(cmdName,arguments)
+		- Then to check for errors use perror(cmd)
+	3. In the parent process wait for the child process to complete
+
  */
 int main(int argc, char **argv) {
 

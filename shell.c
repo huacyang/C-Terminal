@@ -154,7 +154,6 @@ void storeARG(argPtr arg, int start, int end) {
 	arg->argIndex[0] = start;
 	arg->argIndex[1] = end;
 	arg->next = initializeARG();
-	arg = arg->next;
 }
 
 /*
@@ -207,16 +206,19 @@ int main(int argc, char **argv) {
 			//printf("%i - %i\n", str, i);
 			//printf("[%s]\n", temp);
 
-			if (toggle == 0)
+			if (toggle == 0) {
 				toggle = storeCMD(currentCMD, str, i+1);
-			else
+			} else {
 				storeARG(currentARG, str, i+1);
+				currentARG = currentARG->next;
+			}
 		} else if (text[i] == ' ') {
 			i = parseSpace(text, i);
 		} else if (text[i] == '|') {
 			toggle = 0;
 			currentCMD->next = initializeCMD();
 			currentCMD = currentCMD->next;
+			currentARG = currentCMD->arguments;
 			//printf("%i - %i\n", str, i);
 			//printf("[|]\n");
 		} else {
@@ -225,10 +227,12 @@ int main(int argc, char **argv) {
 			//printf("%i - %i\n", str, i);
 			//printf("[%s]\n", temp);
 
-			if (toggle == 0)
+			if (toggle == 0) {
 				toggle = storeCMD(currentCMD, str, i+1);
-			else
+			} else {
 				storeARG(currentARG, str, i+1);
+				currentARG = currentARG->next;
+			}
 		}
 	}
 

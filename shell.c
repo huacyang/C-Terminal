@@ -13,8 +13,11 @@
 // defines the maximun number of input commands
 #define tokenSize 100
 
+//numberOfArgs defines the total number of arguments so that the array for execv can be allocated and added to
+
 struct cmd {
     int *ssIndex;
+    int numberOfArgs;
     struct arg *arguments;
     struct cmd *next;
 }; typedef struct cmd *cmdPtr;
@@ -44,6 +47,7 @@ cmdPtr initializeCMD() {
 	cmdPtr cmd = (struct cmd*) calloc(3, sizeof(struct cmd));
 	cmd->ssIndex = (int *) calloc(2, sizeof(int));
 	cmd->arguments = initializeARG();
+	cmd->numberOfArgs = 0;
 	cmd->next = NULL;
 	return cmd;
 }
@@ -110,6 +114,36 @@ void printCommands(cmdPtr cmd, char *text) {
 				break;
 			word = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
 			printf("%s ", word);
+		}
+		printf("\n");
+	}
+	free(word);
+}
+
+/**
+	Run the executed commands brah!
+**/
+
+void executeCommands(cmdPtr cmd, char *text) {
+	cmdPtr cmdPTR;
+	argPtr argPTR;
+	char *command;
+	char *argument;
+
+	//Allocate memory for the array using the total number of args
+
+
+
+	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
+		command = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
+		printf("./%s ", command);
+
+		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
+			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
+				break;
+			argument = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
+
+			printf("%s ", argument);
 		}
 		printf("\n");
 	}
@@ -210,6 +244,7 @@ int main(int argc, char **argv) {
 				toggle = storeCMD(currentCMD, str, i+1);
 			} else {
 				storeARG(currentARG, str, i+1);
+				currentCMD->numberOfArgs++;
 				currentARG = currentARG->next;
 			}
 		} else if (text[i] == ' ') {
@@ -231,6 +266,7 @@ int main(int argc, char **argv) {
 				toggle = storeCMD(currentCMD, str, i+1);
 			} else {
 				storeARG(currentARG, str, i+1);
+				currentCMD->numberOfArgs++;
 				currentARG = currentARG->next;
 			}
 		}

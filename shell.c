@@ -28,11 +28,14 @@ struct arg {
     struct arg *next;
 }; typedef struct arg *argPtr;
 
+void childProcessExecv(int pfd[], char * command, char ** argList);
+void runExitPipe(int pfd[], char * command , char ** argList);
+
 //When creating a command need to allocate space for the command and space for the script itself
 //When passing the command into execv iterate through the list and add to an array, then pass to : execv(path , arguments)
 
 /*
- * Initializes the linked list for storing arguments
+ * Initializes the linked list forc storing arguments
  */
 argPtr initializeARG() {
 	argPtr arg = (struct arg*) calloc(2, sizeof(struct arg));
@@ -136,6 +139,12 @@ void executeCommands(cmdPtr cmd, char *text) {
 	char * path = "/bin/";
 	char *result;
 	int currentPos = 1;
+	int fd[2];
+	int ptr = 0 ;
+
+	pipe(fd);
+
+
 	//Allocate memory for the array using the total number of args
 
 	printf("The number of args is %d",cmd->numberOfArgs);
@@ -155,14 +164,75 @@ void executeCommands(cmdPtr cmd, char *text) {
 			currentPos++;
 		}
 
-		if (execvp(command,argList) < 0)
+		//Run the commands
+
+		if(ptr == 0)
+		{
+			childProcessExecv(fd,command,argList);	
+			ptr++;
+		}
+		else
+		{
+			printf("Running exit");
+			runExitPipe(fd,command,argList);
+			close(fd[0]); close(fd[1]);
+		}
+
+		/*if (execvp(command,argList) < 0)
 		{
 			perror ("execvp");
+		}*/
+	}
+	//free(argument);
+	//free(command);
+}
+
+
+
+	void childProcessExecv(int pfd[], char * command , char ** argList)
+	{
+		int pid;
+		switch (pid = fork()) 
+		{
+			case 0: /* child */
+				dup2(pfd[1], 1);	/* this end of the pipe becomes the standard output */
+				close(pfd[0]); 		/* this process don't need the other end */
+				if (execvp(command, argList) < 0)
+				{
+					printf("There was an error ffs");
+					perror("execvp");	/* it failed! */
+				}	/* run the command */
+				
+
+			default: /* parent does nothing */
+				break;
 		}
 	}
-	free(argument);
-	free(command);
+
+void runExitPipe(int pfd[], char * command , char ** argList)	/* run the second part of the pipeline, cmd2 */
+{
+	int pid;
+
+	switch (pid = fork()) {
+
+	case 0: /* child */
+		dup2(pfd[0], 0);	/* this end of the pipe becomes the standard input */
+		close(pfd[1]);		/* this process doesn't need the other end */
+		printf("\n getting here !!\n");
+		if (execvp(command, argList) < 0)
+		{
+			perror("execvp");	/* it failed! */	
+		}	/* run the command */
+		
+	default: /* parent does nothing */
+		break;
+
+	case -1:
+		perror("fork");
+		exit(1);
+	}
 }
+
 
 /*
  * Helper method for reading from file
@@ -220,6 +290,13 @@ int storeCMD(cmdPtr cmd, int start, int end) {
 /*
  * Main method
 
+	Processes start with three open file descriptors.
+	File descriptor 0 is the standard input and is typically the keyboard input.
+	File descriptor 1 is the standard output and is typically the virtual terminal that is the window where the shell is running.
+	File descriptor 2 is the standard error and is typically the same as the standard output.
+	If the standard output is redirected to a file or another command, errors can still be sent to 
+	the screen where a user can see them.
+
 	Within this method after were done with initialization we need to start using pipe and dub2
 
 	1. Create a pipe using pipe(fd) where fd is the file desc array or in other words a blank int array that will contain output
@@ -232,7 +309,17 @@ int storeCMD(cmdPtr cmd, int start, int end) {
 	3. In the parent process wait for the child process to complete
 
  */
+
+
+
+
 int main(int argc, char **argv) {
+
+	
+	/** SETUP 
+		sets up the structues and allocates the necessary memory for the execvp commands
+	**/
+
 
 	int i, str, toggle;
 	char *text, *temp;
@@ -299,6 +386,14 @@ int main(int argc, char **argv) {
 	}
 
 	printCommands(cmds, text);
+
+	/** END SETUP **/
+
+
+
+
+
+
 	executeCommands(cmds, text);
 	//freeAll(cmds);
 	exit(0);

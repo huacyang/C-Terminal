@@ -28,8 +28,7 @@ struct arg {
     struct arg *next;
 }; typedef struct arg *argPtr;
 
-void childProcessExecv(int pfd[], char * command, char ** argList);
-void runExitPipe(int pfd[], char * command , char ** argList);
+int numCMD;
 
 //When creating a command need to allocate space for the command and space for the script itself
 //When passing the command into execv iterate through the list and add to an array, then pass to : execv(path , arguments)
@@ -107,7 +106,8 @@ int parseSpecialChar(char *text, int i, char arg) {
 	return i;
 }
 
-void printCommands(cmdPtr cmd, char *text) {
+void
+printCommands(cmdPtr cmd, char *text) {
 	cmdPtr cmdPTR;
 	argPtr argPTR;
 	char *word;
@@ -126,104 +126,19 @@ void printCommands(cmdPtr cmd, char *text) {
 	free(word);
 }
 
-/**
-	Run the executed commands brah!
-	This method runs one command at a time
-**/
-
-void executeCommands(cmdPtr cmd, char *text) {
-	cmdPtr cmdPTR;
-	argPtr argPTR;
-	char *command;
-	char *argument;
-	char * path = "/bin/";
-	char *result;
-	int currentPos = 1;
-	int fd[2];
-	int ptr = 0 ;
-
-	pipe(fd);
-
-
-	//Allocate memory for the array using the total number of args
-
-	printf("The number of args is %d",cmd->numberOfArgs);
-
-	char ** argList = (char **) calloc(cmd->numberOfArgs+2, sizeof(char *));
-
-	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
-		argList[0] = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
-		//printf("./%s ", command);
-
-		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
-			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
-				break;
-			argument = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
-
-			argList[currentPos] = argument;
-			currentPos++;
-		}
-
-		//Run the commands
-
-		if(ptr == 0)
-		{
-			childProcessExecv(fd,command,argList);	
-			ptr++;
-		}
-		else
-		{
-			printf("Running exit");
-			runExitPipe(fd,command,argList);
-			close(fd[0]); close(fd[1]);
-		}
-
-		/*if (execvp(command,argList) < 0)
-		{
-			perror ("execvp");
-		}*/
-	}
-	//free(argument);
-	//free(command);
-}
-
-
-
-	void childProcessExecv(int pfd[], char * command , char ** argList)
-	{
-		int pid;
-		switch (pid = fork()) 
-		{
-			case 0: /* child */
-				dup2(pfd[1], 1);	/* this end of the pipe becomes the standard output */
-				close(pfd[0]); 		/* this process don't need the other end */
-				if (execvp(command, argList) < 0)
-				{
-					printf("There was an error ffs");
-					perror("execvp");	/* it failed! */
-				}	/* run the command */
-				
-
-			default: /* parent does nothing */
-				break;
-		}
-	}
-
-void runExitPipe(int pfd[], char * command , char ** argList)	/* run the second part of the pipeline, cmd2 */
+void
+runChild(int pfd[], char **cmd, int fildeSTR, int fildeEND)	/* run the first part of the pipeline, cmd1 */
 {
-	int pid;
+	int pid;	/* we don't use the process ID here, but you may wnat to print it for debugging */
 
 	switch (pid = fork()) {
 
 	case 0: /* child */
-		dup2(pfd[0], 0);	/* this end of the pipe becomes the standard input */
-		close(pfd[1]);		/* this process doesn't need the other end */
-		printf("\n getting here !!\n");
-		if (execvp(command, argList) < 0)
-		{
-			perror("execvp");	/* it failed! */	
-		}	/* run the command */
-		
+		dup2(pfd[fildeEND], fildeEND);	/* this end of the pipe becomes the standard output */
+		close(pfd[fildeSTR]); 		/* this process don't need the other end */
+		execvp(cmd[0], cmd);	/* run the command */
+		perror(cmd[0]);	/* it failed! */
+
 	default: /* parent does nothing */
 		break;
 
@@ -233,6 +148,52 @@ void runExitPipe(int pfd[], char * command , char ** argList)	/* run the second 
 	}
 }
 
+/*
+ * Run the executed commands brah!
+ * This method runs one command at a time
+ */
+void executeCommands(cmdPtr cmd, char *text) {
+	cmdPtr cmdPTR;
+	argPtr argPTR;
+	char *result,
+		 *path = "/bin/";
+	int fd[2],
+		ptr = 0,
+		pid, i,
+		status,
+		currentPos = 1,
+		fildeSTR = 0,
+		fildeEND = numCMD;
+	pipe(fd);
+
+	//Allocate memory for the array using the total number of args
+	char ** argList = (char **) calloc(cmd->numberOfArgs+2, sizeof(char *));
+
+	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
+		argList[0] = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
+		//printf("./%s ", argList[0]);
+
+		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
+			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
+				break;
+			argList[currentPos] = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
+			//printf(" %s", argList[currentPos]);
+			currentPos++;
+		}
+		runChild(fd, argList, fildeSTR, fildeEND);
+		fildeSTR++;
+		fildeEND--;
+	}
+
+	for (i = 0; i <= numCMD; i++)
+		close(fd[i]);
+
+	while ((pid = wait(&status)) != -1)
+		fprintf(stderr, "process %d exits with %d\n", pid, WEXITSTATUS(status));
+
+	//free(argument);
+	//free(command);
+}
 
 /*
  * Helper method for reading from file
@@ -311,15 +272,7 @@ int storeCMD(cmdPtr cmd, int start, int end) {
  */
 
 
-
-
 int main(int argc, char **argv) {
-
-	
-	/** SETUP 
-		sets up the structues and allocates the necessary memory for the execvp commands
-	**/
-
 
 	int i, str, toggle;
 	char *text, *temp;
@@ -334,6 +287,7 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Wrong format!");
 	}
 
+	numCMD = 0;
 	cmds = initializeCMD();
 	currentCMD = cmds;
 	currentARG = cmds->arguments;
@@ -349,9 +303,6 @@ int main(int argc, char **argv) {
 				fprintf(stderr, "Error: mismatched quote!\n");
 				exit(1);
 			}
-			//temp = nextToken(text, str, i+1);
-			//printf("%i - %i\n", str, i);
-			//printf("[%s]\n", temp);
 
 			if (toggle == 0) {
 				toggle = storeCMD(currentCMD, str, i+1);
@@ -363,17 +314,13 @@ int main(int argc, char **argv) {
 		} else if (text[i] == ' ') {
 			i = parseSpace(text, i);
 		} else if (text[i] == '|') {
+			numCMD++;
 			toggle = 0;
 			currentCMD->next = initializeCMD();
 			currentCMD = currentCMD->next;
 			currentARG = currentCMD->arguments;
-			//printf("%i - %i\n", str, i);
-			//printf("[|]\n");
 		} else {
 			i = parseLetter(text, i);
-			//temp = nextToken(text, str, i+1);
-			//printf("%i - %i\n", str, i);
-			//printf("[%s]\n", temp);
 
 			if (toggle == 0) {
 				toggle = storeCMD(currentCMD, str, i+1);
@@ -385,15 +332,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	printCommands(cmds, text);
-
-	/** END SETUP **/
-
-
-
-
-
-
+	//printCommands(cmds, text);
 	executeCommands(cmds, text);
 	//freeAll(cmds);
 	exit(0);

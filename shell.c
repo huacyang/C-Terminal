@@ -13,6 +13,9 @@
 #define bufferSize 4096
 // defines the maximun number of input commands
 #define tokenSize 100
+// Standard In/Out values for Pipe
+#define _stdIn 0
+#define _stdOut 1
 
 //numberOfArgs defines the total number of arguments so that the array for execv can be allocated and added to
 
@@ -30,25 +33,22 @@ struct arg {
 
 int numCMD;
 
-//When creating a command need to allocate space for the command and space for the script itself
-//When passing the command into execv iterate through the list and add to an array, then pass to : execv(path , arguments)
-
 /*
  * Initializes the linked list forc storing arguments
  */
-argPtr initializeARG() {
+argPtr 
+initializeARG() {
 	argPtr arg = (struct arg*) calloc(2, sizeof(struct arg));
 	arg->argIndex = (int*) calloc(2, sizeof(int));
 	arg->next = NULL;
 	return arg;
 }
 
-
-
 /*
  * Initializes the linked list for storing commands
  */
-cmdPtr initializeCMD() {
+cmdPtr 
+initializeCMD() {
 	cmdPtr cmd = (struct cmd*) calloc(3, sizeof(struct cmd));
 	cmd->ssIndex = (int *) calloc(2, sizeof(int));
 	cmd->arguments = initializeARG();
@@ -60,7 +60,8 @@ cmdPtr initializeCMD() {
 /*
  * Helper method for getting the next token
  */
-char *nextToken(char *text, int str, int end) {
+char*
+nextToken(char *text, int str, int end) {
 	int i, n;
 	char *substring = (char*) calloc(end-str, sizeof(char));
 	for (i = str, n = 0; i < end; i++, n++)
@@ -71,7 +72,8 @@ char *nextToken(char *text, int str, int end) {
 /*
  * Helper method for parsing letters
  */
-int parseLetter(char *text, int i) {
+int
+parseLetter(char *text, int i) {
 	for (; i < strlen(text); i++)
 		if (text[i+1] == '\'' ||
 			text[i+1] == '\"' ||
@@ -86,7 +88,8 @@ int parseLetter(char *text, int i) {
 /*
  * Helper method for parsing empty spaces
  */
-int parseSpace(char *text, int i) {
+int
+parseSpace(char *text, int i) {
 	for (; i < strlen(text); i++)
 		if (text[i+1] != ' ')
 			break;
@@ -96,7 +99,8 @@ int parseSpace(char *text, int i) {
 /*
  * Helper method for parsing quotes
  */
-int parseSpecialChar(char *text, int i, char arg) {
+int
+parseSpecialChar(char *text, int i, char arg) {
 	int found = 0;
 	for (; i < strlen(text); i++) {
 		if (text[i] == arg) {
@@ -127,24 +131,39 @@ printCommands(cmdPtr cmd, char *text) {
 }
 
 void
-runChild(int pfd[], char **cmd, int fildeSTR, int fildeEND)	/* run the first part of the pipeline, cmd1 */
-{
-	int pid;	/* we don't use the process ID here, but you may wnat to print it for debugging */
+closePFD(int pfd[], int n) {
+	int i;
+	for (i = 0; i < numCMD+2; i++) {
+		//printf("Close pipe of %i at %i\n", n, i);
+		close(pfd[i]);
+	}
+}
+
+void
+runChild(int pfd[], char **cmd, int pfdNUM) {
+	int pid, n;
 
 	switch (pid = fork()) {
+		case 0: /* child */
+			if (pfdNUM == 0) { // first pipe
+				dup2(pfd[pfdNUM+1], _stdOut);
+			} else if (pfdNUM == numCMD) { // last pipe
+				dup2(pfd[pfdNUM], _stdIn);
+			} else { // monkey in the middle
+				dup2(pfd[pfdNUM-1], _stdIn);
+				dup2(pfd[pfdNUM+2], _stdOut);
+			}
 
-	case 0: /* child */
-		dup2(pfd[fildeEND], fildeEND);	/* this end of the pipe becomes the standard output */
-		close(pfd[fildeSTR]); 		/* this process don't need the other end */
-		execvp(cmd[0], cmd);	/* run the command */
-		perror(cmd[0]);	/* it failed! */
-
-	default: /* parent does nothing */
-		break;
-
-	case -1:
-		perror("fork");
-		exit(1);
+			// calls helper to close all file descriptors
+			closePFD(pfd, pfdNUM);
+			
+			if ((execvp(cmd[0], cmd)) < 0)	/* run the command */
+				perror(cmd[0]);	/* it failed! */
+		default: /* parent does nothing */
+			break;
+		case -1:
+			perror("fork");
+			exit(1);
 	}
 }
 
@@ -152,24 +171,33 @@ runChild(int pfd[], char **cmd, int fildeSTR, int fildeEND)	/* run the first par
  * Run the executed commands brah!
  * This method runs one command at a time
  */
-void executeCommands(cmdPtr cmd, char *text) {
+void
+executeCommands(cmdPtr cmd, char *text) {
 	cmdPtr cmdPTR;
 	argPtr argPTR;
 	char *result,
-		 *path = "/bin/";
-	int fd[2],
+		 *path = "/bin/",
+		 **argList;
+	int fd[numCMD+2],
 		ptr = 0,
 		pid, i,
 		status,
-		currentPos = 1,
-		fildeSTR = 0,
-		fildeEND = numCMD;
-	pipe(fd);
+		currentPos = 1;
+		//fildeSTR = 0,
+		//fildeEND = numCMD;
+	int pCount = 0;
 
-	//Allocate memory for the array using the total number of args
-	char ** argList = (char **) calloc(cmd->numberOfArgs+2, sizeof(char *));
+	printf("Total CMD: %i\n", numCMD);
+
+	// generate pipes
+	for (i = 0; i < numCMD+2; i++)
+		if (i%2 == 0)
+			pipe(fd + i);
+	
+	// Allocate memory for the array using the total number of args
 
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
+		argList = (char **) calloc(cmdPTR->numberOfArgs+2, sizeof(char *));
 		argList[0] = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
 		//printf("./%s ", argList[0]);
 
@@ -180,12 +208,14 @@ void executeCommands(cmdPtr cmd, char *text) {
 			//printf(" %s", argList[currentPos]);
 			currentPos++;
 		}
-		runChild(fd, argList, fildeSTR, fildeEND);
-		fildeSTR++;
-		fildeEND--;
+
+		runChild(fd, argList, pCount);
+		pCount++;
+		currentPos = 1;
 	}
 
-	for (i = 0; i <= numCMD; i++)
+	// parent close all file descriptors
+	for (i = 0; i <= numCMD+2; i++)
 		close(fd[i]);
 
 	while ((pid = wait(&status)) != -1)
@@ -198,7 +228,8 @@ void executeCommands(cmdPtr cmd, char *text) {
 /*
  * Helper method for reading from file
  */
-char *readFile(char *filepath) {
+char*
+readFile(char *filepath) {
 	FILE* file;
 	char* text = (char *) calloc(bufferSize, sizeof(char));
 	file = fopen(filepath, "r");
@@ -214,7 +245,8 @@ char *readFile(char *filepath) {
 /* 
  * Helper method for reading from command line
  */
-char *readLine() {
+char*
+readLine() {
 	char* text = (char*) calloc(bufferSize, sizeof(char));
 	printf("Enter command(s):\n$ ");
 	// reads user input
@@ -229,7 +261,8 @@ char *readLine() {
  *	@param	end		the end index of a word or phrase
  *	@return			the next argument in the linked list (empty)
  */
-void storeARG(argPtr arg, int start, int end) {
+void
+storeARG(argPtr arg, int start, int end) {
 	arg->argIndex[0] = start;
 	arg->argIndex[1] = end;
 	arg->next = initializeARG();
@@ -242,7 +275,8 @@ void storeARG(argPtr arg, int start, int end) {
  *	@param	end		the end index of a shell script
  *	@return			1
  */
-int storeCMD(cmdPtr cmd, int start, int end) {
+int
+storeCMD(cmdPtr cmd, int start, int end) {
 	cmd->ssIndex[0] = start;
 	cmd->ssIndex[1] = end;
 	return 1;
@@ -272,7 +306,8 @@ int storeCMD(cmdPtr cmd, int start, int end) {
  */
 
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv) {
 
 	int i, str, toggle;
 	char *text, *temp;

@@ -96,6 +96,7 @@ parseLetter(char *text, int i) {
 			text[i+1] == '\"' ||
 			text[i+1] == ' '  ||
 			text[i+1] == '|'  ||
+			text[i+1] == ';'  ||
 			text[i+1] == '\n' ||
 			text[i+1] == '\r')
 			break;
@@ -134,15 +135,15 @@ printCommands(cmdPtr cmd, char *text) {
 	char *word;
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
 		word = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
-		printf("./%s ", word);
+		fprintf(stdout, "./%s ", word);
 
 		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
 			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
 				break;
 			word = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
-			printf("%s ", word);
+			fprintf(stdout, "%s ", word);
 		}
-		printf("\n");
+		fprintf(stdout, "\n");
 	}
 	free(word);
 }
@@ -156,30 +157,28 @@ closePFD(int *pfd) {
 }
 
 void
-runChild(int *pfd, char **cmd, int pfdNUM) {
+runChild(int *pfd, char **cmd, int pfdNUM, int toggle) {
 	int pid, n;
 
 	switch (pid = fork()) {
-		case 0: /* child */
-			if (pfdNUM == 0) { // first pipe
-				//printf("%i) %i, %i\n", pfdNUM, pfdNUM+1, _stdOut);
-				dup2(pfd[pfdNUM+1], _stdOut);
-			} else if (pfdNUM == numCMD) { // last pipe
-				//printf("%i) %i, %i\n", pfdNUM, (2*pfdNUM)-2, _stdIn);
-				dup2(pfd[(2*pfdNUM)-2], _stdIn);
-			} else { // monkey in the middle
-				//printf("%i) %i, %i\n", pfdNUM, (2*pfdNUM)-2, _stdIn);
-				//printf("%i) %i, %i\n", pfdNUM, (2*pfdNUM)+1, _stdOut);
-				dup2(pfd[(2*pfdNUM)-2], _stdIn);
-				dup2(pfd[(2*pfdNUM)+1], _stdOut);
-			}
-
-			// calls helper to close all file descriptors
-			closePFD(pfd);
+		case 0: // child labor
+			// toggle for pipe commands
+			if (toggle == 0) {
+				if (pfdNUM == 0) { // first pipe
+					dup2(pfd[pfdNUM+1], _stdOut);
+				} else if (pfdNUM == numCMD) { // last pipe
+					dup2(pfd[(2*pfdNUM)-2], _stdIn);
+				} else { // monkey in the middle
+					dup2(pfd[(2*pfdNUM)-2], _stdIn);
+					dup2(pfd[(2*pfdNUM)+1], _stdOut);
+				}
+				// calls helper to close all file descriptors
+				closePFD(pfd);
+			}			
 			
 			if ((execvp(cmd[0], cmd)) < 0)	/* run the command */
 				perror(cmd[0]);	/* it failed! */
-		default: /* parent does nothing */
+		default: // parent does nothing
 			break;
 		case -1:
 			perror("fork");
@@ -192,22 +191,21 @@ runChild(int *pfd, char **cmd, int pfdNUM) {
  * This method runs one command at a time
  */
 void
-executeCommands(cmdPtr cmd, char *text) {
+executeCommands(cmdPtr cmd, char *text, int toggle) {
 	cmdPtr cmdPTR;
 	argPtr argPTR;
 	char *result,
 		 *path = "/bin/",
 		 **argList;
 	int ptr = 0,
-		pid, i,
-		status,
+		pCount = 0,
 		currentPos = 1,
+		pid, i, status,
 		pfdLen = (numCMD*2);
-	int pCount = 0;
 
 	int fd[pfdLen];
 
-	// generate pipes
+	// allocate pipes
 	for (i = 0; i < pfdLen; i++)
 		if (i%2 == 0)
 			pipe(fd + i);
@@ -217,17 +215,17 @@ executeCommands(cmdPtr cmd, char *text) {
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
 		argList = (char **) calloc(cmdPTR->numberOfArgs+2, sizeof(char *));
 		argList[0] = nextToken(text, cmdPTR->ssIndex[0], cmdPTR->ssIndex[1]);
-		//printf("./%s ", argList[0]);
+		//fprintf(stdout, "./%s ", argList[0]);
 
 		for (argPTR = cmdPTR->arguments; argPTR != NULL; argPTR = argPTR->next) {
 			if (argPTR->argIndex[0] == '\0' || argPTR->argIndex[1] == '\0')
 				break;
 			argList[currentPos] = nextToken(text, argPTR->argIndex[0], argPTR->argIndex[1]);
-			//printf(" %s", argList[currentPos]);
+			//fprintf(stdout, " %s", argList[currentPos]);
 			currentPos++;
 		}
 
-		runChild(fd, argList, pCount);
+		runChild(fd, argList, pCount, toggle);
 		pCount++;
 		currentPos = 1;
 	}
@@ -262,12 +260,15 @@ readStdin() {
         /* read from stdin until it's end */
         while((bytes_read = fread(&buffer, buffer_size, 1, file)) == buffer_size) {
             //fprintf(stdout, "%s", buffer);
-            buffer = strapoff(buffer);
-			text = strcat(text, buffer);
-			//sprintf("%s %c", text, buffer[0]);
+            if (buffer[0] == '\r' ||
+            	buffer[0] == '\n')
+				text = strcat(text, "|");
+			else
+				text = strcat(text, buffer);
         }
     }
 
+    text[strlen(text)-1] = '\r';
     fclose(file);
     return text;
 }
@@ -278,7 +279,7 @@ readStdin() {
 char*
 readLine() {
 	char* text = (char*) calloc(bufferSize, sizeof(char));
-	printf("Enter command(s):\n$ ");
+	fprintf(stdout, "Enter command(s):\n$ ");
 	// reads user input
 	fgets(text, bufferSize, stdin);
 	return text;
@@ -315,7 +316,7 @@ storeCMD(cmdPtr cmd, int start, int end) {
 int
 main(int argc, char **argv) {
 
-	int i, str, toggle;
+	int i, str, toggle, atStdin = 0;
 	char *text, *temp;
 	cmdPtr cmds, currentCMD;
 	argPtr currentARG;
@@ -326,11 +327,10 @@ main(int argc, char **argv) {
 		text = readLine();
 	} else if (isatty(1)) { // input to terminal (standard input)
 		text = readStdin();
+		atStdin = 1;
 	} else { // wrong input
 		fprintf(stderr, "Wrong format!");
 	}
-
-	printf("[%s]\n", text);
 
 	numCMD = 0;
 	toggle = 0;
@@ -377,8 +377,16 @@ main(int argc, char **argv) {
 		}
 	}
 
-	//printCommands(cmds, text);
-	executeCommands(cmds, text);
+	if(strcmp(nextToken(text,cmds->ssIndex[0],cmds->ssIndex[1]),"cd") == 0) {
+		temp = nextToken(text,cmds->arguments->argIndex[0],cmds->arguments->argIndex[1]);
+		if (chdir(temp) < 0)
+			printf("\nFailed to work\n");
+	} else if(strstr(text,"exit") != NULL) {
+		exit(0);
+	} else {
+		executeCommands(cmds, text, atStdin);
+	}
+
 	//freeAll(cmds);
 	exit(0);
 }

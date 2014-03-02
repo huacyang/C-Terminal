@@ -1,4 +1,0 @@
-z a d c b
-hello 
-world
-poop

@@ -22,8 +22,6 @@
 #define _stdIn 0
 #define _stdOut 1
 
-//numberOfArgs defines the total number of arguments so that the array for execv can be allocated and added to
-
 struct cmd {
     int *ssIndex;
     int numberOfArgs;

@@ -11,6 +11,7 @@
 #include <ctype.h>
 // defines the maximun size of input buffer
 #define bufferSize 4096
+#define stdinSize 1
 // defines the maximun number of input commands
 #define tokenSize 100
 // Standard In/Out values for Pipe
@@ -32,6 +33,7 @@ struct arg {
 }; typedef struct arg *argPtr;
 
 int numCMD;
+int pfdLen;
 
 /*
  * Initializes the linked list forc storing arguments
@@ -57,9 +59,24 @@ initializeCMD() {
 	return cmd;
 }
 
-/*
- * Helper method for getting the next token
- */
+/* Helper method for converting the given array to string */
+char*
+arrayToString(char **argv) {
+	int i, length;
+	char *string;
+
+	length = 1;
+	for (i = 1; argv[i]; i++)
+		length += strlen(argv[i]);
+
+	string = (char *) calloc(length, sizeof(char));
+	for (i = 1; argv[i]; i++)
+		string = strcat(string, argv[i]);
+
+	return string;
+}
+
+/* Helper method for getting the next token */
 char*
 nextToken(char *text, int str, int end) {
 	int i, n;
@@ -131,31 +148,34 @@ printCommands(cmdPtr cmd, char *text) {
 }
 
 void
-closePFD(int pfd[], int n) {
-	int i;
-	for (i = 0; i < numCMD+2; i++) {
-		//printf("Close pipe of %i at %i\n", n, i);
+closePFD(int *pfd) {
+	int i, n = (numCMD*2);
+	for (i = 0; i < n; i++) {
 		close(pfd[i]);
 	}
 }
 
 void
-runChild(int pfd[], char **cmd, int pfdNUM) {
+runChild(int *pfd, char **cmd, int pfdNUM) {
 	int pid, n;
 
 	switch (pid = fork()) {
 		case 0: /* child */
 			if (pfdNUM == 0) { // first pipe
+				//printf("%i) %i, %i\n", pfdNUM, pfdNUM+1, _stdOut);
 				dup2(pfd[pfdNUM+1], _stdOut);
 			} else if (pfdNUM == numCMD) { // last pipe
-				dup2(pfd[pfdNUM], _stdIn);
+				//printf("%i) %i, %i\n", pfdNUM, (2*pfdNUM)-2, _stdIn);
+				dup2(pfd[(2*pfdNUM)-2], _stdIn);
 			} else { // monkey in the middle
-				dup2(pfd[pfdNUM-1], _stdIn);
-				dup2(pfd[pfdNUM+2], _stdOut);
+				//printf("%i) %i, %i\n", pfdNUM, (2*pfdNUM)-2, _stdIn);
+				//printf("%i) %i, %i\n", pfdNUM, (2*pfdNUM)+1, _stdOut);
+				dup2(pfd[(2*pfdNUM)-2], _stdIn);
+				dup2(pfd[(2*pfdNUM)+1], _stdOut);
 			}
 
 			// calls helper to close all file descriptors
-			closePFD(pfd, pfdNUM);
+			closePFD(pfd);
 			
 			if ((execvp(cmd[0], cmd)) < 0)	/* run the command */
 				perror(cmd[0]);	/* it failed! */
@@ -178,19 +198,17 @@ executeCommands(cmdPtr cmd, char *text) {
 	char *result,
 		 *path = "/bin/",
 		 **argList;
-	int fd[numCMD+2],
-		ptr = 0,
+	int ptr = 0,
 		pid, i,
 		status,
-		currentPos = 1;
-		//fildeSTR = 0,
-		//fildeEND = numCMD;
+		currentPos = 1,
+		pfdLen = (numCMD*2);
 	int pCount = 0;
 
-	printf("Total CMD: %i\n", numCMD);
+	int fd[pfdLen];
 
 	// generate pipes
-	for (i = 0; i < numCMD+2; i++)
+	for (i = 0; i < pfdLen; i++)
 		if (i%2 == 0)
 			pipe(fd + i);
 	
@@ -215,8 +233,7 @@ executeCommands(cmdPtr cmd, char *text) {
 	}
 
 	// parent close all file descriptors
-	for (i = 0; i <= numCMD+2; i++)
-		close(fd[i]);
+	closePFD(fd);
 
 	while ((pid = wait(&status)) != -1)
 		fprintf(stderr, "process %d exits with %d\n", pid, WEXITSTATUS(status));
@@ -226,20 +243,33 @@ executeCommands(cmdPtr cmd, char *text) {
 }
 
 /*
- * Helper method for reading from file
+ * Helper method for reading from standard in
  */
 char*
-readFile(char *filepath) {
-	FILE* file;
-	char* text = (char *) calloc(bufferSize, sizeof(char));
-	file = fopen(filepath, "r");
-	if (file == NULL) {
-		fprintf(stderr, "File does not exist!\n");
-		exit(0);
-	}
-	fgets(text, bufferSize, file);
-	fclose(file);
-	return text;
+readStdin() {
+	FILE *file;
+	int buffer_size = 0,
+		bytes_read=0;
+	char *text = (char*) calloc(bufferSize, sizeof(char)),
+		 *temp = (char*) calloc(bufferSize/4, sizeof(char));
+	char buffer[stdinSize];
+
+
+	buffer_size = sizeof(unsigned char)*stdinSize;
+	file = fopen("/dev/stdin","r");
+	
+	if(file!=NULL) {
+        /* read from stdin until it's end */
+        while((bytes_read = fread(&buffer, buffer_size, 1, file)) == buffer_size) {
+            //fprintf(stdout, "%s", buffer);
+            buffer = strapoff(buffer);
+			text = strcat(text, buffer);
+			//sprintf("%s %c", text, buffer[0]);
+        }
+    }
+
+    fclose(file);
+    return text;
 }
 
 /* 
@@ -282,30 +312,6 @@ storeCMD(cmdPtr cmd, int start, int end) {
 	return 1;
 }
 
-/*
- * Main method
-
-	Processes start with three open file descriptors.
-	File descriptor 0 is the standard input and is typically the keyboard input.
-	File descriptor 1 is the standard output and is typically the virtual terminal that is the window where the shell is running.
-	File descriptor 2 is the standard error and is typically the same as the standard output.
-	If the standard output is redirected to a file or another command, errors can still be sent to 
-	the screen where a user can see them.
-
-	Within this method after were done with initialization we need to start using pipe and dub2
-
-	1. Create a pipe using pipe(fd) where fd is the file desc array or in other words a blank int array that will contain output
-	2. In the child process run a method that will execute the different commands
-		- Within the child process fork as many times as needed to complete all the commands in the array in the example this is 2
-		- Within the child processes use dupe2(cmd[n],n) which changes the standard file desc
-		- Then close the pipe using close(cmd[n+1])
-		- Then run the execvp(cmdName,arguments)
-		- Then to check for errors use perror(cmd)
-	3. In the parent process wait for the child process to complete
-
- */
-
-
 int
 main(int argc, char **argv) {
 
@@ -314,19 +320,23 @@ main(int argc, char **argv) {
 	cmdPtr cmds, currentCMD;
 	argPtr currentARG;
 
-	if (isatty(0)) { // input from terminal (terminal input)
+	if (argc > 1) {
+		text = arrayToString(argv);
+	} else if (isatty(0)) { // input from terminal (terminal input)
 		text = readLine();
 	} else if (isatty(1)) { // input to terminal (standard input)
-		text = readFile(argv[1]);
+		text = readStdin();
 	} else { // wrong input
 		fprintf(stderr, "Wrong format!");
 	}
 
+	printf("[%s]\n", text);
+
 	numCMD = 0;
+	toggle = 0;
 	cmds = initializeCMD();
 	currentCMD = cmds;
 	currentARG = cmds->arguments;
-	toggle = 0;
 
 	for (i = 0; i < strlen(text); i++) {
 		str = i;
@@ -342,7 +352,7 @@ main(int argc, char **argv) {
 			if (toggle == 0) {
 				toggle = storeCMD(currentCMD, str, i+1);
 			} else {
-				storeARG(currentARG, str, i+1);
+				storeARG(currentARG, str+1, i);
 				currentCMD->numberOfArgs++;
 				currentARG = currentARG->next;
 			}

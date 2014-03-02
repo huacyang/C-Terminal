@@ -1,6 +1,10 @@
 /*
  * @author: Hua Yang
  * @RUID: 128-00-2637
+ * @author: Erik Kamp
+ * @RUID: 132-00-4838
+ * @author: Sharlina Keshava
+ * @RUID: 140-00-9007
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -312,6 +316,28 @@ storeCMD(cmdPtr cmd, int start, int end) {
 	cmd->ssIndex[1] = end;
 	return 1;
 }
+
+/*
+void
+freeAll(cmdPtr cmds) {
+	cmdPtr ptrOuter = cmds, ptrOuterTemp;
+	argPtr ptrInner, ptrInnerTemp;
+
+	while (ptrOuter != NULL) {
+		ptrInner = ptrOuter->arguments;
+		while (ptrInner != NULL) {
+			ptrInnerTemp = ptrInner;
+			ptrInner = ptrInner->next;
+			free(ptrInnerTemp);
+		}
+		free(ptrOuter->arguments);
+		ptrOuterTemp = ptrOuter;
+		ptrOuter = ptrOuter->next;
+		free(ptrOuterTemp);
+	}
+	//free(cmds);
+}
+*/
 
 int
 main(int argc, char **argv) {

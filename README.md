@@ -1,6 +1,18 @@
-C-Terminal
-==========
+## C-Terminal
 
-Terminal in C
+A simple shell program (written in C) that will run one command or a pipeline of commands.
 
-execv('\bin\[command]', '\bin\[command]\[arguments]');
+This program utilizes the following system calls:
+	
+* `fork`
+* `execve`
+* `wait`
+* `pipe`
+* `dup2`
+* `chdir`
+* `exit`
+
+## Authors
+@ [Hua Yang](https://github.com/huacyang)  
+@ [Erik Kamp](https://github.com/ekamp)  
+@ [Sharlina Keshava](https://github.com/sharlinak)

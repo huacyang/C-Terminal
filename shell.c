@@ -403,6 +403,11 @@ main(int argc, char **argv) {
 
 	if(strcmp(nextToken(text,cmds->ssIndex[0],cmds->ssIndex[1]),"cd") == 0) {
 		temp = nextToken(text,cmds->arguments->argIndex[0],cmds->arguments->argIndex[1]);
+		if(cmds->arguments->next != NULL)
+		{
+			fprintf(stdout,"ERROR : Too many arguments\n");
+			exit(0);
+		}
 		if (chdir(temp) < 0)
 			printf("\nFailed to work\n");
 	} else if(strstr(text,"exit") != NULL) {

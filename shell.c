@@ -1,11 +1,3 @@
-/*
- * @author: Hua Yang
- * @RUID: 128-00-2637
- * @author: Erik Kamp
- * @RUID: 132-00-4838
- * @author: Sharlina Keshava
- * @RUID: 140-00-9007
- */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +32,7 @@ int pfdLen;
 /*
  * Initializes the linked list forc storing arguments
  */
-argPtr 
+argPtr
 initializeARG() {
 	argPtr arg = (struct arg*) calloc(2, sizeof(struct arg));
 	arg->argIndex = (int*) calloc(2, sizeof(int));
@@ -51,7 +43,7 @@ initializeARG() {
 /*
  * Initializes the linked list for storing commands
  */
-cmdPtr 
+cmdPtr
 initializeCMD() {
 	cmdPtr cmd = (struct cmd*) calloc(3, sizeof(struct cmd));
 	cmd->ssIndex = (int *) calloc(2, sizeof(int));
@@ -176,8 +168,8 @@ runChild(int *pfd, char **cmd, int pfdNUM, int toggle) {
 				}
 				// calls helper to close all file descriptors
 				closePFD(pfd);
-			}			
-			
+			}
+
 			if ((execvp(cmd[0], cmd)) < 0)	/* run the command */
 				perror(cmd[0]);	/* it failed! */
 		default: // parent does nothing
@@ -211,7 +203,7 @@ executeCommands(cmdPtr cmd, char *text, int toggle) {
 	for (i = 0; i < pfdLen; i++)
 		if (i%2 == 0)
 			pipe(fd + i);
-	
+
 	// Allocate memory for the array using the total number of args
 
 	for (cmdPTR = cmd; cmdPTR != NULL; cmdPTR = cmdPTR->next) {
@@ -257,7 +249,7 @@ readStdin() {
 
 	buffer_size = sizeof(unsigned char)*stdinSize;
 	file = fopen("/dev/stdin","r");
-	
+
 	if(file!=NULL) {
         /* read from stdin until it's end */
         while((bytes_read = fread(&buffer, buffer_size, 1, file)) == buffer_size) {
@@ -275,7 +267,7 @@ readStdin() {
     return text;
 }
 
-/* 
+/*
  * Helper method for reading from command line
  */
 char*
